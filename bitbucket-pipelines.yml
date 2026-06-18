@@ -1,0 +1,61 @@
+image: node:20-slim
+
+# Permission-contract CI. Pure-data repo — no install step, no compile,
+# just validate the JSON and dry-run the codegen scripts.
+#
+# Tag `v*` only publishes to GitHub (public mirror). Bitbucket hosts the
+# primary remote; GitHub is the read-only mirror consumed by SDK pipelines.
+
+pipelines:
+  default:
+    - step:
+        name: Validate contract
+        script:
+          - node scripts/validate.mjs
+          # Dry-run both codegens — proves the JSON produces output
+          # without an actual consumer in the loop. Output is thrown
+          # away; the assertion is "did not throw".
+          - node scripts/codegen-ts.mjs permissions.json > /dev/null
+          - node scripts/codegen-py.mjs permissions.json > /dev/null
+
+  branches:
+    main:
+      - step:
+          name: Validate contract
+          script:
+            - node scripts/validate.mjs
+            - node scripts/codegen-ts.mjs permissions.json > /dev/null
+            - node scripts/codegen-py.mjs permissions.json > /dev/null
+
+  tags:
+    v*:
+      - step:
+          name: Validate contract
+          script:
+            - node scripts/validate.mjs
+            - node scripts/codegen-ts.mjs permissions.json > /dev/null
+            - node scripts/codegen-py.mjs permissions.json > /dev/null
+      - step:
+          name: Assert tag matches contract version
+          script:
+            - CONTRACT_VERSION="v$(node -p "require('./permissions.json').version")"
+            - |
+              if [ "$CONTRACT_VERSION" != "$BITBUCKET_TAG" ]; then
+                echo "Tag $BITBUCKET_TAG does not match permissions.json version $CONTRACT_VERSION"
+                exit 1
+              fi
+            - echo "Tag $BITBUCKET_TAG matches permissions.json version $CONTRACT_VERSION"
+      - step:
+          name: Push to public GitHub mirror
+          deployment: production
+          script:
+            - |
+              if [ -z "$GITHUB_PUSH_TOKEN" ]; then
+                echo "GITHUB_PUSH_TOKEN repo variable not set — skipping mirror push"
+                echo "Tag is still reachable via Bitbucket at ${BITBUCKET_TAG}"
+                exit 0
+              fi
+            - git remote add github "https://x-access-token:${GITHUB_PUSH_TOKEN}@github.com/wazobiatech/permission-contract.git"
+            - git push github "${BITBUCKET_TAG}:refs/tags/${BITBUCKET_TAG}"
+            - git push github main:main
+            - echo "Mirrored to github.com/wazobiatech/permission-contract"

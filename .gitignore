@@ -1,0 +1,14 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.DS_Store
+
+# Generated outputs (the scripts emit to stdout; nothing should be committed)
+*.generated.ts
+*.generated.py
+
+# Editor
+.vscode/
+.idea/
+*.swp
