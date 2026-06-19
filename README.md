@@ -2,8 +2,10 @@
 
 > Language-agnostic source of truth for the platform's role → permission
 > map. Consumed by [`@wazobiatech/helios-permissions`](https://bitbucket.org/wazobiatech/helios-permissions)
-> (TypeScript) and [`wazobiatech-helios-permissions`](https://bitbucket.org/wazobiatech/helios-permissions-py)
-> (Python) via codegen at SDK build time.
+> (TypeScript), [`wazobiatech-helios-permissions`](https://bitbucket.org/wazobiatech/helios-permissions-py)
+> (Python), [`wazobiatech/helios-permissions-go`](https://bitbucket.org/wazobiatech/helios-permissions-go)
+> (Go), and [`wazobia/helios-permissions`](https://bitbucket.org/wazobiatech/helios-permissions-laravel)
+> (Laravel/PHP) via codegen at SDK build time.
 
 ## Status
 
@@ -11,7 +13,7 @@
 |---|---|
 | Version | **1.0.0** |
 | Mirrored to | `github.com/wazobiatech/permission-contract` (public, tagged `v1.0.0`) |
-| Consumers | helios-permissions (TS), helios-permissions-py (Python) |
+| Consumers | helios-permissions (TS), helios-permissions-py (Python), helios-permissions-go (Go), helios-permissions-laravel (PHP) |
 | Ticket | ZIN-4901a |
 
 ## What lives here
@@ -23,6 +25,8 @@ scripts/
   validate.mjs                # Closes the permission union; refuses drift
   codegen-ts.mjs              # Emits src/role-permissions.ts for the TS SDK
   codegen-py.mjs              # Emits src/helios_permissions/role_permissions.py for the Python SDK
+  codegen-go.mjs              # Emits role_permissions.go for the Go SDK (also: cmd/codegen in the Go SDK repo)
+  codegen-php.mjs             # Emits Role.php, Permission.php, RolePermissions.php for the Laravel SDK (also: bin/codegen in the Laravel SDK repo)
 ci/
   validate.yml                # GitHub Actions — runs on every push + PR
 ```
@@ -110,18 +114,23 @@ Same pattern as `nexus-mcp-contract`.
 
 ## Consumer codegen
 
-Both SDKs run the same pattern in CI:
+All four SDKs run the same pattern in CI:
 
 1. Fetch `permissions.json` from the pinned GitHub mirror tag.
 2. Validate it (re-run `validate.mjs` defensively).
-3. Run `codegen-{ts,py}.mjs` to emit the static `role-permissions` file
-   that the SDK imports.
-4. `tsc` / `ruff` / `pytest` on the generated file.
+3. Run `codegen-{ts,py,go,php}.mjs` to emit the static `role-permissions`
+   files that the SDKs import.
+4. `tsc` / `ruff` / `pytest` / `go test` / `phpunit` on the generated file.
 5. The generated file IS the source of truth in the SDK — there is no
    runtime JSON parsing.
 
-This preserves the closed `Permission` union that the v0.1.0 / v0.2.0
-SDKs exposed for compile-time typo detection.
+This preserves the closed `Permission` union / enum that the SDKs
+expose for compile-time typo detection.
+
+The Go and PHP SDKs also ship a self-hosted emitter (`cmd/codegen` in
+Go, `bin/codegen` in PHP) that produces functionally equivalent output
+without requiring Node in slim CI images. The Node emitter is the
+source of truth; the self-hosted emitter is a convenience.
 
 ## Why a separate repo
 

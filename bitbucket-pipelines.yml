@@ -12,11 +12,17 @@ pipelines:
         name: Validate contract
         script:
           - node scripts/validate.mjs
-          # Dry-run both codegens — proves the JSON produces output
+          # Dry-run all four codegens — proves the JSON produces output
           # without an actual consumer in the loop. Output is thrown
           # away; the assertion is "did not throw".
           - node scripts/codegen-ts.mjs permissions.json > /dev/null
           - node scripts/codegen-py.mjs permissions.json > /dev/null
+          - node scripts/codegen-go.mjs permissions.json > /dev/null
+          - node scripts/codegen-php.mjs permissions.json > /dev/null
+          # Pin the Go / PHP emitter output against checked-in fixtures —
+          # catches emitter regressions before they ship.
+          - node tests/codegen-go.test.mjs
+          - node tests/codegen-php.test.mjs
 
   branches:
     main:
@@ -26,6 +32,10 @@ pipelines:
             - node scripts/validate.mjs
             - node scripts/codegen-ts.mjs permissions.json > /dev/null
             - node scripts/codegen-py.mjs permissions.json > /dev/null
+            - node scripts/codegen-go.mjs permissions.json > /dev/null
+            - node scripts/codegen-php.mjs permissions.json > /dev/null
+            - node tests/codegen-go.test.mjs
+            - node tests/codegen-php.test.mjs
 
   tags:
     v*:
@@ -35,6 +45,10 @@ pipelines:
             - node scripts/validate.mjs
             - node scripts/codegen-ts.mjs permissions.json > /dev/null
             - node scripts/codegen-py.mjs permissions.json > /dev/null
+            - node scripts/codegen-go.mjs permissions.json > /dev/null
+            - node scripts/codegen-php.mjs permissions.json > /dev/null
+            - node tests/codegen-go.test.mjs
+            - node tests/codegen-php.test.mjs
       - step:
           name: Assert tag matches contract version
           script:
