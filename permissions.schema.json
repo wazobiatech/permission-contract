@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/wazobiatech/permission-contract/main/permissions.schema.json",
   "title": "Nexus Permission Contract",
-  "description": "Schema for permissions.json — the canonical role → permission map. Validated in CI before any contract version is tagged.",
+  "description": "Schema for permissions.json — the canonical role → permission map. Validated in CI before any contract version is tagged. v1.3.0 schema: perms are objects with `name` and `scope` (one of self, platform, project, platform/project).",
   "type": "object",
   "required": ["version", "services", "roles", "permissions", "role_permissions"],
   "properties": {
@@ -32,17 +32,16 @@
       }
     },
     "permissions": {
+      "description": "Perm vocabulary. Each service maps to an array of perm objects. Each perm has a `name` (matching the platform's {service}:{resource}:{action} convention) and a `scope` (one of: self, platform, project, platform/project).",
       "type": "object",
       "additionalProperties": {
         "type": "array",
         "uniqueItems": true,
-        "items": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$"
-        }
+        "items": { "$ref": "#/definitions/perm" }
       }
     },
     "role_permissions": {
+      "description": "Static role → permission map. Only contains `platform` and `platform/project` scope perms; `self` perms are universal (resolver grants them implicitly); `project` perms are tenant-user only (granted via TenantRole, not in this map).",
       "type": "object",
       "additionalProperties": {
         "type": "object",
@@ -67,14 +66,30 @@
       }
     },
     "owner_only_permissions": {
+      "description": "Optional helper field. Lists platform-scope perms that should appear ONLY in OWNER's role_permissions. Validated against role_permissions by scripts/validate.mjs. (Destructive perms — no delegation to ADMIN.)",
       "type": "array",
       "uniqueItems": true,
-      "items": { "type": "string" }
-    },
-    "universal_permissions": {
-      "type": "array",
-      "uniqueItems": true,
-      "items": { "type": "string" }
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$"
+      }
+    }
+  },
+  "definitions": {
+    "perm": {
+      "type": "object",
+      "required": ["name", "scope"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$"
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["self", "platform", "project", "platform/project"]
+        }
+      }
     }
   }
 }

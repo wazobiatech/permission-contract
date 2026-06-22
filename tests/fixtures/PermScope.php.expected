@@ -6,9 +6,14 @@
  * Generated at: 2026-06-22
  * Regenerate via: node scripts/codegen-php.mjs permissions.json <out-dir>
  *
- * Role — closed enum of platform roles. Backed by the same string values
- * Helios's Prisma RoleType uses. New roles must be added to the contract's
- * roles[] array and the codegen re-run.
+ * PermScope — closed enum of valid permission scopes. Mirrors the
+ * contract's scope enum. v1.3.0+.
+ *
+ * Scope semantics:
+ *   self              — universal, granted implicitly to every user
+ *   platform          — granted via ROLE_PERMISSIONS (platform-user path)
+ *   project           — granted via TenantRole (tenant-user path)
+ *   platform/project  — valid via either path
  *
  * Permission naming convention: {service}:{resource}:{action}.
  *   service  — one of: athens, mercury, muse, helios
@@ -20,10 +25,10 @@ declare(strict_types=1);
 
 namespace Wazobia\HeliosPermissions;
 
-enum Role: string
+enum PermScope: string
 {
-    case Owner = 'OWNER';
-    case Admin = 'ADMIN';
-    case Editor = 'EDITOR';
-    case Viewer = 'VIEWER';
+    case Self = 'self';
+    case Platform = 'platform';
+    case Project = 'project';
+    case PlatformProject = 'platform/project';
 }

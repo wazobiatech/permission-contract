@@ -1,43 +1,49 @@
 {
   "$schema": "./permissions.schema.json",
-  "version": "1.0.0",
-  "description": "Canonical Nexus permission contract. Source of truth for the platform's role → permission map. Consumed by helios-permissions (TS) and helios-permissions-py (Python) via codegen at SDK build time.",
+  "version": "1.3.0",
+  "description": "Canonical Nexus permission contract. Source of truth for the platform's role → permission map. v1.3.0 introduces 4 perm scopes (self, platform, project, platform/project) replacing the v1.0.0 default_grant flag. Consumed by helios-permissions SDKs via codegen at SDK build time.",
   "naming_convention": "{service}:{resource}:{action}",
   "services": ["athens", "mercury", "muse", "helios"],
   "roles": ["OWNER", "ADMIN", "EDITOR", "VIEWER"],
   "permissions": {
     "athens": [
-      "athens:project:view",
-      "athens:project:update",
-      "athens:project:delete",
-      "athens:services:enable",
-      "athens:services:disable",
-      "athens:team:invite",
-      "athens:team:remove"
+      { "name": "athens:project:view",     "scope": "platform" },
+      { "name": "athens:project:update",   "scope": "platform" },
+      { "name": "athens:project:delete",   "scope": "platform" },
+      { "name": "athens:services:enable",  "scope": "platform" },
+      { "name": "athens:services:disable", "scope": "platform" },
+      { "name": "athens:team:invite",      "scope": "platform" },
+      { "name": "athens:team:remove",      "scope": "platform" }
     ],
     "mercury": [
-      "mercury:users:read",
-      "mercury:users:write",
-      "mercury:api_keys:manage",
-      "mercury:connections:read"
+      { "name": "mercury:user:read:self",  "scope": "self"     },
+      { "name": "mercury:user:write:self", "scope": "self"     },
+      { "name": "mercury:users:read",      "scope": "platform" },
+      { "name": "mercury:users:write",     "scope": "platform" },
+      { "name": "mercury:api_keys:manage", "scope": "platform" }
     ],
     "muse": [
-      "muse:posts:read",
-      "muse:posts:write",
-      "muse:posts:delete",
-      "muse:drafts:read",
-      "muse:drafts:write"
+      { "name": "muse:blog:create",        "scope": "platform" },
+      { "name": "muse:blog:read",          "scope": "platform" },
+      { "name": "muse:author:create",      "scope": "platform" },
+      { "name": "muse:author:read",        "scope": "platform/project" },
+      { "name": "muse:author:delete",      "scope": "platform" },
+      { "name": "muse:posts:read",         "scope": "project" },
+      { "name": "muse:posts:write",        "scope": "project" },
+      { "name": "muse:posts:delete",       "scope": "project" },
+      { "name": "muse:drafts:read",        "scope": "project" },
+      { "name": "muse:drafts:write",       "scope": "project" }
     ],
     "helios": [
-      "helios:members:view",
-      "helios:members:invite",
-      "helios:members:remove",
-      "helios:roles:assign",
-      "helios:roles:revoke",
-      "helios:invitations:create",
-      "helios:invitations:revoke",
-      "helios:tenant:switch",
-      "helios:tenant:transfer"
+      { "name": "helios:tenant:switch:self", "scope": "self"     },
+      { "name": "helios:tenant:transfer",    "scope": "platform" },
+      { "name": "helios:members:view",       "scope": "platform" },
+      { "name": "helios:members:invite",     "scope": "platform" },
+      { "name": "helios:members:remove",     "scope": "platform" },
+      { "name": "helios:roles:assign",       "scope": "platform" },
+      { "name": "helios:roles:revoke",       "scope": "platform" },
+      { "name": "helios:invitations:create", "scope": "platform" },
+      { "name": "helios:invitations:revoke", "scope": "platform" }
     ]
   },
   "role_permissions": {
@@ -54,21 +60,19 @@
         "mercury:users:read",
         "mercury:users:write",
         "mercury:api_keys:manage",
-        "mercury:connections:read",
-        "muse:posts:read",
-        "muse:posts:write",
-        "muse:posts:delete",
-        "muse:drafts:read",
-        "muse:drafts:write",
+        "muse:blog:create",
+        "muse:blog:read",
+        "muse:author:create",
+        "muse:author:read",
+        "muse:author:delete",
+        "helios:tenant:transfer",
         "helios:members:view",
         "helios:members:invite",
         "helios:members:remove",
         "helios:roles:assign",
         "helios:roles:revoke",
         "helios:invitations:create",
-        "helios:invitations:revoke",
-        "helios:tenant:switch",
-        "helios:tenant:transfer"
+        "helios:invitations:revoke"
       ]
     },
     "ADMIN": {
@@ -79,22 +83,21 @@
         "athens:services:enable",
         "athens:services:disable",
         "athens:team:invite",
+        "athens:team:remove",
         "mercury:users:read",
         "mercury:users:write",
         "mercury:api_keys:manage",
-        "mercury:connections:read",
-        "muse:posts:read",
-        "muse:posts:write",
-        "muse:drafts:read",
-        "muse:drafts:write",
+        "muse:blog:create",
+        "muse:blog:read",
+        "muse:author:create",
+        "muse:author:read",
         "helios:members:view",
         "helios:members:invite",
         "helios:members:remove",
         "helios:roles:assign",
         "helios:roles:revoke",
         "helios:invitations:create",
-        "helios:invitations:revoke",
-        "helios:tenant:switch"
+        "helios:invitations:revoke"
       ]
     },
     "EDITOR": {
@@ -102,13 +105,10 @@
       "permissions": [
         "athens:project:view",
         "mercury:users:read",
-        "mercury:connections:read",
-        "muse:posts:read",
-        "muse:posts:write",
-        "muse:drafts:read",
-        "muse:drafts:write",
-        "helios:members:view",
-        "helios:tenant:switch"
+        "muse:blog:create",
+        "muse:blog:read",
+        "muse:author:create",
+        "muse:author:read"
       ]
     },
     "VIEWER": {
@@ -116,20 +116,14 @@
       "permissions": [
         "athens:project:view",
         "mercury:users:read",
-        "mercury:connections:read",
-        "muse:posts:read",
-        "muse:drafts:read",
-        "helios:members:view",
-        "helios:tenant:switch"
+        "muse:blog:read",
+        "muse:author:read"
       ]
     }
   },
   "owner_only_permissions": [
     "athens:project:delete",
-    "muse:posts:delete",
+    "muse:author:delete",
     "helios:tenant:transfer"
-  ],
-  "universal_permissions": [
-    "helios:tenant:switch"
   ]
 }

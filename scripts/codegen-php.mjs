@@ -2,15 +2,22 @@
 // =============================================================================
 // permission-contract — PHP codegen.
 //
-// Reads permissions.json and emits three files for the
+// Reads permissions.json and emits four files for the
 // wazobia/helios-permissions Laravel SDK:
 //
 //   Role.php             — closed Role enum
 //   Permission.php       — closed Permission enum
-//   RolePermissions.php  — role → perm map + helpers
+//   PermScope.php        — closed PermScope enum (v1.3.0+)
+//   RolePermissions.php  — role → perm map + helpers + PERM_SCOPE map
 //
 // Output preserves the closed Permission enum (PHP 8.1 backed string)
 // for compile-time typo detection.
+//
+// v1.3.0 codegen: perms are partitioned by `scope` into four groups
+// (SELF, PLATFORM, PROJECT, DUAL). The `PERM_SCOPE` constant gives
+// O(1) scope lookup at runtime — used by Helios's two-track resolver
+// to gate which path (platform-user vs tenant-user) is valid for a
+// given perm.
 //
 // Usage:
 //   node scripts/codegen-php.mjs <contract.json> <out-dir>
@@ -35,6 +42,26 @@ const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
 const VERSION = contract.version;
 const GENERATED_AT = new Date().toISOString().slice(0, 10);
 
+// Perms are objects in v1.3.0+. Flatten and bucket by scope.
+const SELF = [];
+const PLATFORM = [];
+const PROJECT = [];
+const DUAL = [];
+const allPerms = []; // sorted list of { name, caseName }
+for (const [, perms] of Object.entries(contract.permissions)) {
+  for (const p of perms) {
+    const parts = p.name.split(':');
+    const caseName = parts.map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1)).join('');
+    const entry = { name: p.name, caseName, scope: p.scope };
+    allPerms.push(entry);
+    if (p.scope === 'self') SELF.push(entry);
+    else if (p.scope === 'platform') PLATFORM.push(entry);
+    else if (p.scope === 'project') PROJECT.push(entry);
+    else if (p.scope === 'platform/project') DUAL.push(entry);
+  }
+}
+allPerms.sort((a, b) => a.name.localeCompare(b.name));
+
 const roles = contract.roles.map((role) => {
   const def = contract.role_permissions[role];
   return {
@@ -43,14 +70,7 @@ const roles = contract.roles.map((role) => {
   };
 });
 
-const allPerms = Object.values(contract.permissions).flat();
-const sortedPerms = [...allPerms].sort();
-
 const caseName = (s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-const permCaseName = (p) => {
-  const parts = p.split(':');
-  return parts.map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1)).join('');
-};
 
 const header = (extraComment) => `<?php
 /**
@@ -90,16 +110,29 @@ let permLines = [];
 permLines.push(header('Permission — closed enum of every permission string in the platform.\n * PHP 8.1 backed enums give compile-time typo protection: a perm not\n * listed here fails the type checker.'));
 permLines.push(`enum Permission: string`);
 permLines.push(`{`);
-for (const p of sortedPerms) {
-  permLines.push(`    case ${permCaseName(p)} = '${p}';`);
+for (const p of allPerms) {
+  permLines.push(`    case ${p.caseName} = '${p.name}';`);
 }
 permLines.push(`}`);
 permLines.push(``);
 const permPhp = permLines.join('\n');
 
+// === PermScope.php ===
+let scopeLines = [];
+scopeLines.push(header('PermScope — closed enum of valid permission scopes. Mirrors the\n * contract\'s scope enum. v1.3.0+.\n *\n * Scope semantics:\n *   self              — universal, granted implicitly to every user\n *   platform          — granted via ROLE_PERMISSIONS (platform-user path)\n *   project           — granted via TenantRole (tenant-user path)\n *   platform/project  — valid via either path'));
+scopeLines.push(`enum PermScope: string`);
+scopeLines.push(`{`);
+scopeLines.push(`    case Self = 'self';`);
+scopeLines.push(`    case Platform = 'platform';`);
+scopeLines.push(`    case Project = 'project';`);
+scopeLines.push(`    case PlatformProject = 'platform/project';`);
+scopeLines.push(`}`);
+scopeLines.push(``);
+const scopePhp = scopeLines.join('\n');
+
 // === RolePermissions.php ===
 let rpLines = [];
-rpLines.push(header('RolePermissions — canonical role → permission map and helpers.\n *\n * Mirrors the TS / Python / Go SDKs. Every role lists its permissions\n * explicitly — no inheritance. The contract validator\n * (scripts/validate.mjs) enforces:\n *   - helios:tenant:switch is present in every role (universal perm).\n *   - helios:tenant:transfer is present only in OWNER (ZIN-4714).\n *   - Every role has >= 1 permission.\n *   - No role references a perm outside the vocabulary.'));
+rpLines.push(header('RolePermissions — canonical role → permission map, scope lookup, and helpers.\n *\n * Mirrors the TS / Python / Go SDKs. Every role lists its permissions\n * explicitly — no inheritance. The contract validator\n * (scripts/validate.mjs) enforces:\n *   - helios:tenant:switch:self is present as a self-scope perm (universal).\n *   - helios:tenant:transfer is OWNER-only (platform scope).\n *   - Every role has >= 1 permission.\n *   - No role references a perm outside the vocabulary.\n *   - No self or project perms in any role.'));
 rpLines.push(`final class RolePermissions`);
 rpLines.push(`{`);
 rpLines.push(`    /** Every role in the platform. Same order as the contract's roles[]. */`);
@@ -109,15 +142,35 @@ for (const r of contract.roles) {
 }
 rpLines.push(`    ];`);
 rpLines.push(``);
-rpLines.push(`    /** @var array<string, list<Permission>> role → perm map. */`);
+rpLines.push(`    /**`);
+rpLines.push(`     * @var array<string, list<Permission>> role → perm map.`);
+rpLines.push(`     *`);
+rpLines.push(`     * Only contains platform and platform/project perms;`);
+rpLines.push(`     * self perms are universal (granted by the resolver's Step 1)`);
+rpLines.push(`     * and project perms are for tenant users via TenantRole.`);
+rpLines.push(`     */`);
 rpLines.push(`    private const ROLE_PERMISSIONS = [`);
 for (const { role, perms } of roles) {
   rpLines.push(`        '${role}' => [`);
   for (const p of perms) {
-    rpLines.push(`            Permission::${permCaseName(p)},`);
+    const parts = p.split(':');
+    const cName = parts.map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1)).join('');
+    rpLines.push(`            Permission::${cName},`);
   }
   rpLines.push(`        ],`);
 }
+rpLines.push(`    ];`);
+rpLines.push(``);
+rpLines.push(`    /**`);
+rpLines.push(`     * @var array<string, PermScope> perm → scope lookup. Populated at module`);
+rpLines.push(`     * load. The two-track resolver in Helios checks PERM_SCOPE[perm] to`);
+rpLines.push(`     * decide which path (platform-user vs tenant-user) is valid.`);
+rpLines.push(`     */`);
+rpLines.push(`    public const PERM_SCOPE = [`);
+for (const p of SELF) rpLines.push(`        '${p.name}' => PermScope::Self,`);
+for (const p of PLATFORM) rpLines.push(`        '${p.name}' => PermScope::Platform,`);
+for (const p of PROJECT) rpLines.push(`        '${p.name}' => PermScope::Project,`);
+for (const p of DUAL) rpLines.push(`        '${p.name}' => PermScope::PlatformProject,`);
 rpLines.push(`    ];`);
 rpLines.push(``);
 rpLines.push(`    /**`);
@@ -152,6 +205,48 @@ rpLines.push(`    public static function isValidPermission(Permission $perm): bo
 rpLines.push(`    {`);
 rpLines.push(`        return in_array($perm, Permission::cases(), true);`);
 rpLines.push(`    }`);
+rpLines.push(``);
+rpLines.push(`    /**`);
+rpLines.push(`     * Return the scope of a perm, or null if the perm is tenant-defined`);
+rpLines.push(`     * (not in the contract vocabulary).`);
+rpLines.push(`     */`);
+rpLines.push(`    public static function scopeOf(Permission $perm): ?PermScope`);
+rpLines.push(`    {`);
+rpLines.push(`        return self::PERM_SCOPE[$perm->value] ?? null;`);
+rpLines.push(`    }`);
+rpLines.push(``);
+rpLines.push(`    /**`);
+rpLines.push(`     * True if perm has scope 'self' (universal — granted without any role`);
+rpLines.push(`     * lookup). Used by the resolver's Step 1.`);
+rpLines.push(`     */`);
+rpLines.push(`    public static function isSelfScope(Permission $perm): bool`);
+rpLines.push(`    {`);
+rpLines.push(`        return self::scopeOf($perm) === PermScope::Self;`);
+rpLines.push(`    }`);
+rpLines.push(``);
+rpLines.push(`    /**`);
+rpLines.push(`     * True if perm is grantable via the platform-user path (scope is`);
+rpLines.push(`     * 'platform' or 'platform/project').`);
+rpLines.push(`     */`);
+rpLines.push(`    public static function isPlatformGrantable(Permission $perm): bool`);
+rpLines.push(`    {`);
+rpLines.push(`        $s = self::scopeOf($perm);`);
+rpLines.push(`        return $s === PermScope::Platform || $s === PermScope::PlatformProject;`);
+rpLines.push(`    }`);
+rpLines.push(``);
+rpLines.push(`    /**`);
+rpLines.push(`     * True if perm is grantable via the tenant-user path. Scope 'project'`);
+rpLines.push(`     * and 'platform/project' are grantable. Any perm NOT in PERM_SCOPE is`);
+rpLines.push(`     * treated as tenant-defined and therefore grantable via TenantRole.`);
+rpLines.push(`     */`);
+rpLines.push(`    public static function isTenantGrantable(string $perm): bool`);
+rpLines.push(`    {`);
+rpLines.push(`        if (!isset(self::PERM_SCOPE[$perm])) {`);
+rpLines.push(`            return true;`);
+rpLines.push(`        }`);
+rpLines.push(`        $s = self::PERM_SCOPE[$perm];`);
+rpLines.push(`        return $s === PermScope::Project || $s === PermScope::PlatformProject;`);
+rpLines.push(`    }`);
 rpLines.push(`}`);
 rpLines.push(``);
 const rpPhp = rpLines.join('\n');
@@ -159,7 +254,9 @@ const rpPhp = rpLines.join('\n');
 mkdirSync(pathResolve(outDir), { recursive: true });
 writeFileSync(pathResolve(outDir, 'Role.php'), rolePhp);
 writeFileSync(pathResolve(outDir, 'Permission.php'), permPhp);
+writeFileSync(pathResolve(outDir, 'PermScope.php'), scopePhp);
 writeFileSync(pathResolve(outDir, 'RolePermissions.php'), rpPhp);
 console.log(`wrote ${pathResolve(outDir, 'Role.php')}`);
 console.log(`wrote ${pathResolve(outDir, 'Permission.php')}`);
+console.log(`wrote ${pathResolve(outDir, 'PermScope.php')}`);
 console.log(`wrote ${pathResolve(outDir, 'RolePermissions.php')}`);
