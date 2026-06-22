@@ -106,10 +106,24 @@ emitTuple('DUAL_PERMISSIONS', DUAL);
 
 w(`# The full set of valid permission strings in the system.`);
 w(`# Use Literal[...] at type-check time for closed-union typo detection.`);
-w(`SelfPermission = Literal[${SELF.map(p => `"${p}"`).join(', ')}]`);
-w(`PlatformPermission = Literal[${PLATFORM.map(p => `"${p}"`).join(', ')}]`);
-w(`ProjectPermission = Literal[${PROJECT.map(p => `"${p}"`).join(', ')}]`);
-w(`DualPermission = Literal[${DUAL.map(p => `"${p}"`).join(', ')}]`);
+const literalBlock = (name, items) => {
+  // Multi-line Literal so each line is <= 100 chars (ruff's default).
+  // mypy / pyright parse this identically to a single-line Literal.
+  const single = `${name} = Literal[${items.map(p => `"${p}"`).join(', ')}]`;
+  if (single.length <= 100) {
+    w(single);
+  } else {
+    w(`${name} = Literal[`);
+    for (const p of items) {
+      w(`    "${p}",`);
+    }
+    w(`]`);
+  }
+};
+literalBlock('SelfPermission', SELF);
+literalBlock('PlatformPermission', PLATFORM);
+literalBlock('ProjectPermission', PROJECT);
+literalBlock('DualPermission', DUAL);
 w(`Permission = Literal[SelfPermission | PlatformPermission | ProjectPermission | DualPermission]`);
 w();
 w(`# Mirrors the contract's \`scope\` enum. Four valid values.`);

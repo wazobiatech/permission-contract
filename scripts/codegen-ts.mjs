@@ -55,7 +55,7 @@ function arrayLiteral(items, indent = 2) {
 }
 
 function constantTuple(name, items) {
-  return `const ${name} = ${arrayLiteral(items)} as const;`;
+  return `export const ${name} = ${arrayLiteral(items)} as const;`;
 }
 
 // -----------------------------------------------------------------------------
