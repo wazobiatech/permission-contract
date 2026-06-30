@@ -11,10 +11,10 @@
 
 | | |
 |---|---|
-| Version | **1.3.0** |
+| Version | **1.5.0** |
 | Mirrored to | `github.com/wazobiatech/permission-contract` (public) |
 | Consumers | helios-permissions (TS), helios-permissions-py (Python), helios-permissions-go (Go), helios-permissions-laravel (PHP) |
-| Tickets | ZIN-4901a (v1.0.0), ZIN-4801 (v1.3.0 — 4-scope model) |
+| Tickets | ZIN-4901a (v1.0.0), ZIN-4801 (v1.3.0 — 4-scope model), ZIN-4902 (v1.5.0 — Mercury expansion) |
 
 ## What lives here
 
@@ -38,7 +38,7 @@ tests/
 
 ```jsonc
 {
-  "version": "1.3.0",
+  "version": "1.5.0",
   "services":  ["athens", "mercury", "muse", "helios"],
   "roles":     ["OWNER", "ADMIN", "EDITOR", "VIEWER"],
   "permissions": {
@@ -89,7 +89,7 @@ wide.
 - `resource` — domain noun (project, users, posts, members, …)
 - `action` — verb (view, write, delete, manage, …)
 
-Regex enforced by the schema: `^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$`.
+Regex enforced by the schema (v1.5.0+): `^([a-z][a-z0-9_-]*:){2,3}[a-z][a-z0-9_-]*(:self)?$`. The schema allows **3-or-4 colon-delimited segments** so sub-resources can be encoded in segment 3 — e.g. `mercury:connection_slack:revoke:self` (provider=slack in segment 3, action=revoke in segment 4, scope marker `:self` on the tail). The reserved `:self` suffix remains the scope marker on the final segment.
 
 The reserved suffix **`:self`** marks a perms that is universal — granted
 implicitly to every authenticated user. The validator enforces a
@@ -199,7 +199,7 @@ git push origin main --tags
 SDK pipelines do NOT pull main — they pin to a specific tagged version:
 
 ```
-https://raw.githubusercontent.com/wazobiatech/permission-contract/v1.3.0/permissions.json
+https://raw.githubusercontent.com/wazobiatech/permission-contract/v1.5.0/permissions.json
 ```
 
 Same pattern as `nexus-mcp-contract`.
@@ -227,6 +227,67 @@ The Go and PHP SDKs also ship a self-hosted emitter (`cmd/codegen` in
 Go, `bin/codegen` in PHP) that produces functionally equivalent output
 without requiring Node in slim CI images. The Node emitter is the
 source of truth; the self-hosted emitter is a convenience.
+
+## Changelog
+
+### v1.5.0 — Mercury expansion (ZIN-4902)
+
+**Schema change.** `permissions[*].name` (and the `permissions[*]` items
+inside `role_permissions` and `owner_only_permissions`) now allows
+**3-or-4 colon-delimited segments**. The new regex is
+`^([a-z][a-z0-9_-]*:){2,3}[a-z][a-z0-9_-]*(:self)?$`. All existing
+3-segment names validate unchanged — the change is additive.
+
+**Vocabulary growth — 24 new Mercury perms:**
+
+| Family | Perms | Purpose |
+|---|---|---|
+| A. api_keys split | `mercury:api_keys:create`, `:revoke`, `:read` | split coarse `api_keys:manage` (kept as OWNER-only deprecated umbrella) |
+| B. connection* | `mercury:connection:read:self`, `:connection_slack:phrase_create:self`, `:connection_oauth:initiate:self`, `:connection_oauth:complete:self`, `:connection_slack:revoke:self`, `:connection_google:revoke:self`, `:connection_imap:revoke:self`, `:connection_imap:create:self`, `:connection_oauth:refresh` | per-provider revoke split, OAuth refresh gated to platform callers |
+| C. auth_config* | `mercury:auth_config:read`, `:auth_config_apple:create`, `:auth_config_apple:update`, `:auth_config_oauth:create`, `:auth_config_oauth:update`, `:auth_config_forgot_password:create`, `:auth_config_forgot_password:update`, `:auth_config_forgot_password:read` | credentials-only `platform` perms; never delegable via TenantRole |
+| D. self-delete | `mercury:user:delete:self` | destructive user self-deletion |
+| E. service_clients | `mercury:service_clients:read` | platform-wide service catalog |
+| F. internal endpoints | `mercury:events:consume`, `:users:batch_read` | service-to-service endpoints with HMAC + scope |
+
+**Behavior change.** `mercury:api_keys:manage` is **removed from
+ADMIN's role_permissions** in v1.5.0 — it is OWNER-only now (and
+deprecated; new code should request the specific `api_keys:create`,
+`:revoke`, `:read` perms). Existing ADMINs retain equivalent access
+because the three split perms are now in ADMIN's role_permissions.
+
+**All new Mercury perms are scope `platform` or `self`.** Mercury is
+fundamentally a platform-level service; no operation is tenant-content.
+The `default_grant` / TenantRole-bundlable path has no Mercury perms.
+
+**Codegen impact.** All four emitters (`codegen-ts.mjs`,
+`codegen-py.mjs`, `cmd/codegen/main.go` in Go SDK, `bin/codegen` in
+Laravel SDK) bucket perms by `p.scope`, not segment count — **no
+emitter logic changes**. The Go emitter's `permConstName` and PHP
+emitter's `permCaseName` already handle any segment count; emitted
+identifiers like `MercuryConnection_slackRevokeSelf` are legal in
+both languages (ugly but unambiguous).
+
+**Consumers — pin bump required.** All four SDKs must bump their
+`PERMISSION_CONTRACT_VERSION` pin from `v1.4.0` → `v1.5.0` and
+regenerate their static `role-permissions` files. SDK version bumps
+to `@wazobiatech/helios-permissions@0.6.0`,
+`wazobiatech-helios-permissions@0.6.0`, `helios-permissions-go@v0.6.0`,
+`helios-permissions-laravel@v0.6.0`.
+
+### v1.4.0 — External service perms (ZIN-4813)
+
+Added `helios:external:register`, `:revoke`, `:view` for the "tenant
+brings their own auth" flow. `register` and `revoke` are OWNER-only;
+`view` is OWNER+ADMIN.
+
+### v1.3.0 — 4-scope model (ZIN-4801)
+
+Replaced the v1.0.0 `default_grant` boolean with a first-class `scope`
+field on every perm (`self` / `platform` / `project` /
+`platform/project`). Renamed `helios:tenant:switch` →
+`helios:tenant:switch:self` (now `scope: "self"`).
+
+### v1.0.0 — Initial release (ZIN-4901a)
 
 ## Why a separate repo
 

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/wazobiatech/permission-contract/main/permissions.schema.json",
   "title": "Nexus Permission Contract",
-  "description": "Schema for permissions.json — the canonical role → permission map. Validated in CI before any contract version is tagged. v1.3.0 schema: perms are objects with `name` and `scope` (one of self, platform, project, platform/project).",
+  "description": "Schema for permissions.json — the canonical role → permission map. Validated in CI before any contract version is tagged. v1.3.0 schema: perms are objects with `name` and `scope` (one of self, platform, project, platform/project). v1.5.0 schema: the name regex now allows 3-or-4 colon-delimited segments, enabling perms like `mercury:connection_slack:revoke:self` (sub-resource in segment 3, action in segment 4) and `mercury:auth_config_apple:create`. The reserved `:self` suffix remains the scope marker on the final segment.",
   "type": "object",
   "required": ["version", "services", "roles", "permissions", "role_permissions"],
   "properties": {
@@ -59,7 +59,7 @@
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$"
+              "pattern": "^([a-z][a-z0-9_-]*:){2,3}[a-z][a-z0-9_-]*(:self)?$"
             }
           }
         }
@@ -71,7 +71,7 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$"
+        "pattern": "^([a-z][a-z0-9_-]*:){2,3}[a-z][a-z0-9_-]*(:self)?$"
       }
     }
   },
@@ -83,7 +83,7 @@
       "properties": {
         "name": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$"
+          "pattern": "^([a-z][a-z0-9_-]*:){2,3}[a-z][a-z0-9_-]*(:self)?$"
         },
         "scope": {
           "type": "string",
