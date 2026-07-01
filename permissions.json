@@ -1,9 +1,9 @@
 {
   "$schema": "./permissions.schema.json",
-  "version": "1.5.0",
-  "description": "Canonical Nexus permission contract. Source of truth for the platform's role → permission map. v1.3.0 introduced 4 perm scopes (self, platform, project, platform/project) replacing the v1.0.0 default_grant flag. v1.4.0 added the helios:external:* perms for the Use case 2 'tenant brings their own auth' flow (ZIN-4813) — register / revoke are OWNER-only, view is OWNER+ADMIN. v1.5.0 (ZIN-4902) expands the Mercury vocabulary by 24 perms: split mercury:api_keys:manage into create/revoke/read; add mercury:connection* (slack/oauth/imap with per-provider revoke); add mercury:auth_config* (apple/oauth/forgot_password — credentials, platform-only); add mercury:user:delete:self, mercury:service_clients:read, mercury:events:consume, mercury:users:batch_read. The schema regex is loosened to allow 3-or-4 colon-delimited segments so sub-resources can be encoded in segment 3 (e.g. mercury:connection_slack:revoke:self). All new Mercury perms are scope `platform` or `self` — Mercury is fundamentally a platform-level service with no TenantRole-delegable perms. Consumed by helios-permissions SDKs via codegen at SDK build time.",
+  "version": "1.6.0",
+  "description": "Canonical Nexus permission contract. Source of truth for the platform's role → permission map. v1.3.0 introduced 4 perm scopes (self, platform, project, platform/project) replacing the v1.0.0 default_grant flag. v1.4.0 added the helios:external:* perms for the Use case 2 'tenant brings their own auth' flow (ZIN-4813) — register / revoke are OWNER-only, view is OWNER+ADMIN. v1.5.0 (ZIN-4902) expands the Mercury vocabulary by 24 perms: split mercury:api_keys:manage into create/revoke/read; add mercury:connection* (slack/oauth/imap with per-provider revoke); add mercury:auth_config* (apple/oauth/forgot_password — credentials, platform-only); add mercury:user:delete:self, mercury:service_clients:read, mercury:events:consume, mercury:users:batch_read. The schema regex is loosened to allow 3-or-4 colon-delimited segments so sub-resources can be encoded in segment 3 (e.g. mercury:connection_slack:revoke:self). All new Mercury perms are scope `platform` or `self` — Mercury is fundamentally a platform-level service with no TenantRole-delegable perms. v1.6.0 (ZIN-5068) adds the zeta:* permission vocabulary (14 perms, all scope `project`) for the SnapMyFine B2B fleet management portal. All zeta perms are project-scoped — they are delegated to B2B tenant roles (Fleet Manager, Finance, Driver) via Helios TenantRole. zeta:billing:manage and zeta:tenant:configure are owner-only. Consumed by helios-permissions SDKs via codegen at SDK build time.",
   "naming_convention": "{service}:{resource}:{action} (3 segments; or {service}:{resource_subres}:{action} for 4-segment perms with sub-resources)",
-  "services": ["athens", "mercury", "muse", "helios"],
+  "services": ["athens", "mercury", "muse", "helios", "zeta"],
   "roles": ["OWNER", "ADMIN", "EDITOR", "VIEWER"],
   "permissions": {
     "athens": [
@@ -71,6 +71,22 @@
       { "name": "helios:external:register",      "scope": "platform" },
       { "name": "helios:external:revoke",        "scope": "platform" },
       { "name": "helios:external:view",          "scope": "platform" }
+    ],
+    "zeta": [
+      { "name": "zeta:fines:view",        "scope": "project" },
+      { "name": "zeta:fines:create",      "scope": "project" },
+      { "name": "zeta:fines:pay",         "scope": "project" },
+      { "name": "zeta:fines:challenge",   "scope": "project" },
+      { "name": "zeta:fines:assign",      "scope": "project" },
+      { "name": "zeta:fleet:view",        "scope": "project" },
+      { "name": "zeta:fleet:edit",        "scope": "project" },
+      { "name": "zeta:drivers:view",      "scope": "project" },
+      { "name": "zeta:drivers:manage",    "scope": "project" },
+      { "name": "zeta:reports:view",      "scope": "project" },
+      { "name": "zeta:billing:view",      "scope": "project" },
+      { "name": "zeta:billing:manage",    "scope": "project" },
+      { "name": "zeta:team:manage",       "scope": "project" },
+      { "name": "zeta:tenant:configure",  "scope": "project" }
     ]
   },
   "role_permissions": {
