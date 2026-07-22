@@ -1,202 +1,458 @@
 {
   "$schema": "./permissions.schema.json",
   "version": "1.6.0",
-  "description": "Canonical Nexus permission contract. Source of truth for the platform's role → permission map. v1.3.0 introduced 4 perm scopes (self, platform, project, platform/project) replacing the v1.0.0 default_grant flag. v1.4.0 added the helios:external:* perms for the Use case 2 'tenant brings their own auth' flow (ZIN-4813) — register / revoke are OWNER-only, view is OWNER+ADMIN. v1.5.0 (ZIN-4902) expands the Mercury vocabulary by 24 perms: split mercury:api_keys:manage into create/revoke/read; add mercury:connection* (slack/oauth/imap with per-provider revoke); add mercury:auth_config* (apple/oauth/forgot_password — credentials, platform-only); add mercury:user:delete:self, mercury:service_clients:read, mercury:events:consume, mercury:users:batch_read. The schema regex is loosened to allow 3-or-4 colon-delimited segments so sub-resources can be encoded in segment 3 (e.g. mercury:connection_slack:revoke:self). All new Mercury perms are scope `platform` or `self` — Mercury is fundamentally a platform-level service with no TenantRole-delegable perms. v1.6.0 (ZIN-5068) adds the zeta:* permission vocabulary (14 perms, all scope `project`) for the SnapMyFine B2B fleet management portal. All zeta perms are project-scoped — they are delegated to B2B tenant roles (Fleet Manager, Finance, Driver) via Helios TenantRole. zeta:billing:manage and zeta:tenant:configure are owner-only. Consumed by helios-permissions SDKs via codegen at SDK build time.",
+  "description": "Canonical Nexus permission contract. Source of truth for the platform's role \u2192 permission map. v1.3.0 introduced 4 perm scopes (self, platform, project, platform/project) replacing the v1.0.0 default_grant flag. v1.4.0 added the helios:external:* perms for the Use case 2 'tenant brings their own auth' flow (ZIN-4813) \u2014 register / revoke are OWNER-only, view is OWNER+ADMIN. v1.5.0 (ZIN-4902) expands the Mercury vocabulary by 24 perms: split mercury:api_keys:manage into create/revoke/read; add mercury:connection* (slack/oauth/imap with per-provider revoke); add mercury:auth_config* (apple/oauth/forgot_password \u2014 credentials, platform-only); add mercury:user:delete:self, mercury:service_clients:read, mercury:events:consume, mercury:users:batch_read. The schema regex is loosened to allow 3-or-4 colon-delimited segments so sub-resources can be encoded in segment 3 (e.g. mercury:connection_slack:revoke:self). All new Mercury perms are scope `platform` or `self` \u2014 Mercury is fundamentally a platform-level service with no TenantRole-delegable perms. v1.6.0 (ZIN-5068) adds the zeta:* permission vocabulary (14 perms, all scope `project`) for the SnapMyFine B2B fleet management portal. All zeta perms are project-scoped \u2014 they are delegated to B2B tenant roles (Fleet Manager, Finance, Driver) via Helios TenantRole. zeta:billing:manage and zeta:tenant:configure are owner-only. Consumed by helios-permissions SDKs via codegen at SDK build time.",
   "naming_convention": "{service}:{resource}:{action} (3 segments; or {service}:{resource_subres}:{action} for 4-segment perms with sub-resources)",
-  "services": ["athens", "mercury", "muse", "helios", "zeta"],
-  "roles": ["OWNER", "ADMIN", "EDITOR", "VIEWER"],
+  "services": [
+    "athens",
+    "mercury",
+    "muse",
+    "helios",
+    "zeta"
+  ],
+  "roles": [
+    "OWNER",
+    "ADMIN",
+    "EDITOR",
+    "VIEWER"
+  ],
   "permissions": {
     "athens": [
-      { "name": "athens:project:view",     "scope": "platform" },
-      { "name": "athens:project:update",   "scope": "platform" },
-      { "name": "athens:project:delete",   "scope": "platform" },
-      { "name": "athens:services:enable",  "scope": "platform" },
-      { "name": "athens:services:disable", "scope": "platform" },
-      { "name": "athens:team:invite",      "scope": "platform" },
-      { "name": "athens:team:remove",      "scope": "platform" }
+      {
+        "name": "athens:project:view",
+        "scope": "platform"
+      },
+      {
+        "name": "athens:project:update",
+        "scope": "platform"
+      },
+      {
+        "name": "athens:project:delete",
+        "scope": "platform"
+      },
+      {
+        "name": "athens:services:enable",
+        "scope": "platform"
+      },
+      {
+        "name": "athens:services:disable",
+        "scope": "platform"
+      },
+      {
+        "name": "athens:team:invite",
+        "scope": "platform"
+      },
+      {
+        "name": "athens:team:remove",
+        "scope": "platform"
+      }
     ],
     "mercury": [
-      { "name": "mercury:user:read:self",  "scope": "self"     },
-      { "name": "mercury:user:write:self", "scope": "self"     },
-      { "name": "mercury:user:delete:self","scope": "self"     },
-      { "name": "mercury:users:read",      "scope": "platform" },
-      { "name": "mercury:users:write",     "scope": "platform" },
-      { "name": "mercury:users:batch_read","scope": "platform" },
-      { "name": "mercury:api_keys:create", "scope": "platform" },
-      { "name": "mercury:api_keys:revoke", "scope": "platform" },
-      { "name": "mercury:api_keys:read",   "scope": "platform" },
-      { "name": "mercury:api_keys:manage", "scope": "platform" },
-      { "name": "mercury:service_clients:read", "scope": "platform" },
-      { "name": "mercury:auth_config:read","scope": "platform" },
-      { "name": "mercury:auth_config_apple:create",  "scope": "platform" },
-      { "name": "mercury:auth_config_apple:update",  "scope": "platform" },
-      { "name": "mercury:auth_config_oauth:create",  "scope": "platform" },
-      { "name": "mercury:auth_config_oauth:update",  "scope": "platform" },
-      { "name": "mercury:auth_config_forgot_password:create", "scope": "platform" },
-      { "name": "mercury:auth_config_forgot_password:update", "scope": "platform" },
-      { "name": "mercury:auth_config_forgot_password:read",   "scope": "platform" },
-      { "name": "mercury:connection:read:self",        "scope": "self"     },
-      { "name": "mercury:connection_slack:phrase_create:self", "scope": "self" },
-      { "name": "mercury:connection_oauth:initiate:self", "scope": "self" },
-      { "name": "mercury:connection_oauth:complete:self", "scope": "self" },
-      { "name": "mercury:connection_slack:revoke:self",   "scope": "self" },
-      { "name": "mercury:connection_google:revoke:self",  "scope": "self" },
-      { "name": "mercury:connection_imap:revoke:self",    "scope": "self" },
-      { "name": "mercury:connection_imap:create:self",    "scope": "self" },
-      { "name": "mercury:connection_oauth:refresh",       "scope": "platform" },
-      { "name": "mercury:events:consume", "scope": "platform" }
+      {
+        "name": "mercury:user:read:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:user:write:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:user:delete:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:users:read",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:users:write",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:users:batch_read",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:api_keys:create",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:api_keys:revoke",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:api_keys:read",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:api_keys:manage",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:service_clients:read",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:auth_config:read",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:auth_config_apple:create",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:auth_config_apple:update",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:auth_config_oauth:create",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:auth_config_oauth:update",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:auth_config_forgot_password:create",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:auth_config_forgot_password:update",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:auth_config_forgot_password:read",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:connection:read:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:connection_slack:phrase_create:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:connection_oauth:initiate:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:connection_oauth:complete:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:connection_slack:revoke:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:connection_google:revoke:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:connection_imap:revoke:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:connection_imap:create:self",
+        "scope": "self"
+      },
+      {
+        "name": "mercury:connection_oauth:refresh",
+        "scope": "platform"
+      },
+      {
+        "name": "mercury:events:consume",
+        "scope": "platform"
+      }
     ],
     "muse": [
-      { "name": "muse:blog:create",        "scope": "platform" },
-      { "name": "muse:blog:read",          "scope": "platform" },
-      { "name": "muse:author:create",      "scope": "platform" },
-      { "name": "muse:author:read",        "scope": "platform/project" },
-      { "name": "muse:author:delete",      "scope": "platform" },
-      { "name": "muse:posts:read",         "scope": "project" },
-      { "name": "muse:posts:write",        "scope": "project" },
-      { "name": "muse:posts:delete",       "scope": "project" },
-      { "name": "muse:drafts:read",        "scope": "project" },
-      { "name": "muse:drafts:write",       "scope": "project" }
+      {
+        "name": "muse:blog:create",
+        "scope": "platform"
+      },
+      {
+        "name": "muse:blog:read",
+        "scope": "platform"
+      },
+      {
+        "name": "muse:author:create",
+        "scope": "platform/project"
+      },
+      {
+        "name": "muse:author:read",
+        "scope": "platform/project"
+      },
+      {
+        "name": "muse:author:delete",
+        "scope": "platform/project"
+      },
+      {
+        "name": "muse:posts:read",
+        "scope": "project"
+      },
+      {
+        "name": "muse:posts:write",
+        "scope": "project"
+      },
+      {
+        "name": "muse:posts:delete",
+        "scope": "project"
+      },
+      {
+        "name": "muse:drafts:read",
+        "scope": "project"
+      },
+      {
+        "name": "muse:drafts:write",
+        "scope": "project"
+      },
+      {
+        "name": "muse:author:update",
+        "scope": "platform/project"
+      },
+      {
+        "name": "muse:faq:create",
+        "scope": "platform/project"
+      },
+      {
+        "name": "muse:faq:update",
+        "scope": "platform/project"
+      },
+      {
+        "name": "muse:faq:delete",
+        "scope": "platform/project"
+      }
     ],
     "helios": [
-      { "name": "helios:tenant:switch:self",     "scope": "self"     },
-      { "name": "helios:tenant:transfer",        "scope": "platform" },
-      { "name": "helios:members:view",           "scope": "platform" },
-      { "name": "helios:members:invite",         "scope": "platform" },
-      { "name": "helios:members:remove",         "scope": "platform" },
-      { "name": "helios:roles:assign",           "scope": "platform" },
-      { "name": "helios:roles:revoke",           "scope": "platform" },
-      { "name": "helios:invitations:create",     "scope": "platform" },
-      { "name": "helios:invitations:revoke",     "scope": "platform" },
-      { "name": "helios:external:register",      "scope": "platform" },
-      { "name": "helios:external:revoke",        "scope": "platform" },
-      { "name": "helios:external:view",          "scope": "platform" }
+      {
+        "name": "helios:tenant:switch:self",
+        "scope": "self"
+      },
+      {
+        "name": "helios:tenant:transfer",
+        "scope": "platform"
+      },
+      {
+        "name": "helios:members:view",
+        "scope": "platform"
+      },
+      {
+        "name": "helios:members:invite",
+        "scope": "platform"
+      },
+      {
+        "name": "helios:members:remove",
+        "scope": "platform"
+      },
+      {
+        "name": "helios:roles:assign",
+        "scope": "platform"
+      },
+      {
+        "name": "helios:roles:revoke",
+        "scope": "platform"
+      },
+      {
+        "name": "helios:invitations:create",
+        "scope": "platform"
+      },
+      {
+        "name": "helios:invitations:revoke",
+        "scope": "platform"
+      },
+      {
+        "name": "helios:external:register",
+        "scope": "platform"
+      },
+      {
+        "name": "helios:external:revoke",
+        "scope": "platform"
+      },
+      {
+        "name": "helios:external:view",
+        "scope": "platform"
+      }
     ],
     "zeta": [
-      { "name": "zeta:fines:view",        "scope": "project" },
-      { "name": "zeta:fines:create",      "scope": "project" },
-      { "name": "zeta:fines:pay",         "scope": "project" },
-      { "name": "zeta:fines:challenge",   "scope": "project" },
-      { "name": "zeta:fines:assign",      "scope": "project" },
-      { "name": "zeta:fleet:view",        "scope": "project" },
-      { "name": "zeta:fleet:edit",        "scope": "project" },
-      { "name": "zeta:drivers:view",      "scope": "project" },
-      { "name": "zeta:drivers:manage",    "scope": "project" },
-      { "name": "zeta:reports:view",      "scope": "project" },
-      { "name": "zeta:billing:view",      "scope": "project" },
-      { "name": "zeta:billing:manage",    "scope": "project" },
-      { "name": "zeta:team:manage",       "scope": "project" },
-      { "name": "zeta:tenant:configure",  "scope": "project" }
+      {
+        "name": "zeta:fines:view",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:fines:create",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:fines:pay",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:fines:challenge",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:fines:assign",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:fleet:view",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:fleet:edit",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:drivers:view",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:drivers:manage",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:reports:view",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:billing:view",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:billing:manage",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:team:manage",
+        "scope": "project"
+      },
+      {
+        "name": "zeta:tenant:configure",
+        "scope": "project"
+      }
     ]
   },
   "role_permissions": {
     "OWNER": {
       "inherits_from": null,
       "permissions": [
-        "athens:project:view",
-        "athens:project:update",
         "athens:project:delete",
-        "athens:services:enable",
+        "athens:project:update",
+        "athens:project:view",
         "athens:services:disable",
+        "athens:services:enable",
         "athens:team:invite",
         "athens:team:remove",
-        "mercury:users:read",
-        "mercury:users:write",
-        "mercury:users:batch_read",
-        "mercury:api_keys:manage",
+        "helios:external:register",
+        "helios:external:revoke",
+        "helios:external:view",
+        "helios:invitations:create",
+        "helios:invitations:revoke",
+        "helios:members:invite",
+        "helios:members:remove",
+        "helios:members:view",
+        "helios:roles:assign",
+        "helios:roles:revoke",
+        "helios:tenant:transfer",
         "mercury:api_keys:create",
-        "mercury:api_keys:revoke",
+        "mercury:api_keys:manage",
         "mercury:api_keys:read",
-        "mercury:service_clients:read",
+        "mercury:api_keys:revoke",
         "mercury:auth_config:read",
         "mercury:auth_config_apple:create",
         "mercury:auth_config_apple:update",
+        "mercury:auth_config_forgot_password:create",
+        "mercury:auth_config_forgot_password:read",
+        "mercury:auth_config_forgot_password:update",
         "mercury:auth_config_oauth:create",
         "mercury:auth_config_oauth:update",
-        "mercury:auth_config_forgot_password:create",
-        "mercury:auth_config_forgot_password:update",
-        "mercury:auth_config_forgot_password:read",
         "mercury:connection_oauth:refresh",
         "mercury:events:consume",
+        "mercury:service_clients:read",
+        "mercury:users:batch_read",
+        "mercury:users:read",
+        "mercury:users:write",
+        "muse:author:create",
+        "muse:author:delete",
+        "muse:author:read",
+        "muse:author:update",
         "muse:blog:create",
         "muse:blog:read",
-        "muse:author:create",
-        "muse:author:read",
-        "muse:author:delete",
-        "helios:tenant:transfer",
-        "helios:members:view",
-        "helios:members:invite",
-        "helios:members:remove",
-        "helios:roles:assign",
-        "helios:roles:revoke",
-        "helios:invitations:create",
-        "helios:invitations:revoke",
-        "helios:external:register",
-        "helios:external:revoke",
-        "helios:external:view"
+        "muse:faq:create",
+        "muse:faq:delete",
+        "muse:faq:update"
       ]
     },
     "ADMIN": {
       "inherits_from": null,
       "permissions": [
-        "athens:project:view",
         "athens:project:update",
-        "athens:services:enable",
+        "athens:project:view",
         "athens:services:disable",
+        "athens:services:enable",
         "athens:team:invite",
         "athens:team:remove",
-        "mercury:users:read",
-        "mercury:users:write",
+        "helios:external:view",
+        "helios:invitations:create",
+        "helios:invitations:revoke",
+        "helios:members:invite",
+        "helios:members:remove",
+        "helios:members:view",
+        "helios:roles:assign",
+        "helios:roles:revoke",
         "mercury:api_keys:create",
-        "mercury:api_keys:revoke",
         "mercury:api_keys:read",
-        "mercury:service_clients:read",
+        "mercury:api_keys:revoke",
         "mercury:auth_config:read",
         "mercury:auth_config_apple:create",
         "mercury:auth_config_apple:update",
+        "mercury:auth_config_forgot_password:create",
+        "mercury:auth_config_forgot_password:read",
+        "mercury:auth_config_forgot_password:update",
         "mercury:auth_config_oauth:create",
         "mercury:auth_config_oauth:update",
-        "mercury:auth_config_forgot_password:create",
-        "mercury:auth_config_forgot_password:update",
-        "mercury:auth_config_forgot_password:read",
         "mercury:connection_oauth:refresh",
         "mercury:events:consume",
+        "mercury:service_clients:read",
+        "mercury:users:read",
+        "mercury:users:write",
+        "muse:author:create",
+        "muse:author:delete",
+        "muse:author:read",
+        "muse:author:update",
         "muse:blog:create",
         "muse:blog:read",
-        "muse:author:create",
-        "muse:author:read",
-        "helios:members:view",
-        "helios:members:invite",
-        "helios:members:remove",
-        "helios:roles:assign",
-        "helios:roles:revoke",
-        "helios:invitations:create",
-        "helios:invitations:revoke",
-        "helios:external:view"
+        "muse:faq:create",
+        "muse:faq:delete",
+        "muse:faq:update"
       ]
     },
     "EDITOR": {
       "inherits_from": null,
       "permissions": [
         "athens:project:view",
-        "mercury:users:read",
         "mercury:api_keys:read",
         "mercury:service_clients:read",
+        "mercury:users:read",
+        "muse:author:create",
+        "muse:author:delete",
+        "muse:author:read",
+        "muse:author:update",
         "muse:blog:create",
         "muse:blog:read",
-        "muse:author:create",
-        "muse:author:read"
+        "muse:faq:create",
+        "muse:faq:delete",
+        "muse:faq:update"
       ]
     },
     "VIEWER": {
       "inherits_from": null,
       "permissions": [
         "athens:project:view",
-        "mercury:users:read",
         "mercury:api_keys:read",
         "mercury:service_clients:read",
-        "muse:blog:read",
-        "muse:author:read"
+        "mercury:users:read",
+        "muse:blog:read"
       ]
     }
   },
