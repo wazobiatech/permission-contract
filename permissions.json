@@ -1,14 +1,15 @@
 {
   "$schema": "./permissions.schema.json",
-  "version": "1.9.2",
-  "description": "Canonical Nexus permission contract. Source of truth for the platform's role \u2192 permission map. v1.3.0 introduced 4 perm scopes (self, platform, project, platform/project) replacing the v1.0.0 default_grant flag. v1.4.0 added the helios:external:* perms for the Use case 2 'tenant brings their own auth' flow (ZIN-4813) \u2014 register / revoke are OWNER-only, view is OWNER+ADMIN. v1.5.0 (ZIN-4902) expands the Mercury vocabulary by 24 perms: split mercury:api_keys:manage into create/revoke/read; add mercury:connection* (slack/oauth/imap with per-provider revoke); add mercury:auth_config* (apple/oauth/forgot_password \u2014 credentials, platform-only); add mercury:user:delete:self, mercury:service_clients:read, mercury:events:consume, mercury:users:batch_read. The schema regex is loosened to allow 3-or-4 colon-delimited segments so sub-resources can be encoded in segment 3 (e.g. mercury:connection_slack:revoke:self). All new Mercury perms are scope `platform` or `self` \u2014 Mercury is fundamentally a platform-level service with no TenantRole-delegable perms. v1.6.0 (ZIN-5068) adds the zeta:* permission vocabulary (14 perms, all scope `project`) for the SnapMyFine B2B fleet management portal. All zeta perms are project-scoped \u2014 they are delegated to B2B tenant roles (Fleet Manager, Finance, Driver) via Helios TenantRole. zeta:billing:manage and zeta:tenant:configure are owner-only. v1.7.0 (ZIN-5232) adds 17 new muse perms and bumps muse:posts:delete from project to platform/project. New perms cover blog update/delete (delete is OWNER-only via owner_only_permissions), author update, tag/category/redirect CRUD (the last three resources are all platform/project, dual-track grantable), redirect analytics, and posts:revert. muse:blog:delete is added to owner_only_permissions (6 entries). The previously project-scoped muse:posts:delete is now platform/project so it can be granted via role_permissions to OWNER/ADMIN/EDITOR (it would otherwise be unreachable via TenantRole since muse posts are platform-owned). v1.9.2 corrects an owner_only_permissions regression: muse:author:delete is moved out of owner_only_permissions and granted to OWNER+ADMIN+EDITOR (matching the other 3 muse:author:* perms, all of which are platform/project). muse:blog:delete remains the only muse destructive perm in owner_only_permissions. Also adds 3 muse:faq:* perms (create/update/delete, all platform/project) that were first published in the v1.9.1 tag but without a corresponding version bump. Consumed by helios-permissions SDKs via codegen at SDK build time.",
+  "version": "1.10.0",
+  "description": "Canonical Nexus permission contract. Source of truth for the platform's role \u2192 permission map. v1.3.0 introduced 4 perm scopes (self, platform, project, platform/project) replacing the v1.0.0 default_grant flag. v1.4.0 added the helios:external:* perms for the Use case 2 'tenant brings their own auth' flow (ZIN-4813) \u2014 register / revoke are OWNER-only, view is OWNER+ADMIN. v1.5.0 (ZIN-4902) expands the Mercury vocabulary by 24 perms: split mercury:api_keys:manage into create/revoke/read; add mercury:connection* (slack/oauth/imap with per-provider revoke); add mercury:auth_config* (apple/oauth/forgot_password \u2014 credentials, platform-only); add mercury:user:delete:self, mercury:service_clients:read, mercury:events:consume, mercury:users:batch_read. The schema regex is loosened to allow 3-or-4 colon-delimited segments so sub-resources can be encoded in segment 3 (e.g. mercury:connection_slack:revoke:self). All new Mercury perms are scope `platform` or `self` \u2014 Mercury is fundamentally a platform-level service with no TenantRole-delegable perms. v1.6.0 (ZIN-5068) adds the zeta:* permission vocabulary (14 perms, all scope `project`) for the SnapMyFine B2B fleet management portal. All zeta perms are project-scoped \u2014 they are delegated to B2B tenant roles (Fleet Manager, Finance, Driver) via Helios TenantRole. zeta:billing:manage and zeta:tenant:configure are owner-only. v1.7.0 (ZIN-5232) adds 17 new muse perms and bumps muse:posts:delete from project to platform/project. New perms cover blog update/delete (delete is OWNER-only via owner_only_permissions), author update, tag/category/redirect CRUD (the last three resources are all platform/project, dual-track grantable), redirect analytics, and posts:revert. muse:blog:delete is added to owner_only_permissions (6 entries). The previously project-scoped muse:posts:delete is now platform/project so it can be granted via role_permissions to OWNER/ADMIN/EDITOR (it would otherwise be unreachable via TenantRole since muse posts are platform-owned). v1.9.2 corrects an owner_only_permissions regression: muse:author:delete is moved out of owner_only_permissions and granted to OWNER+ADMIN+EDITOR (matching the other 3 muse:author:* perms, all of which are platform/project). muse:blog:delete remains the only muse destructive perm in owner_only_permissions. Also adds 3 muse:faq:* perms (create/update/delete, all platform/project) that were first published in the v1.9.1 tag but without a corresponding version bump. v1.10.0 adds the prometheus permission vocabulary (8 perms): 4 platform/project prometheus:forms:* perms (create/read/update/delete; delete is OWNER-only via role_permissions, not owner_only_permissions so the dual-track grant via TenantRole stays open), and 4 platform prometheus:responses:* perms (read/update/delete/analytics; update + delete are OWNER+ADMIN only). prometheus:responses:create is intentionally NOT defined — the submit_response tool is fully public (anonymous form-fill is a product requirement) and uses a separate submission_secret capability-URL pattern. Consumed by helios-permissions SDKs via codegen at SDK build time.",
   "naming_convention": "{service}:{resource}:{action} (3 segments; or {service}:{resource_subres}:{action} for 4-segment perms with sub-resources)",
   "services": [
     "athens",
     "mercury",
     "muse",
     "helios",
-    "zeta"
+    "zeta",
+    "prometheus"
   ],
   "roles": [
     "OWNER",
@@ -394,6 +395,40 @@
         "name": "zeta:tenant:configure",
         "scope": "project"
       }
+    ],
+    "prometheus": [
+      {
+        "name": "prometheus:forms:create",
+        "scope": "platform/project"
+      },
+      {
+        "name": "prometheus:forms:read",
+        "scope": "platform/project"
+      },
+      {
+        "name": "prometheus:forms:update",
+        "scope": "platform/project"
+      },
+      {
+        "name": "prometheus:forms:delete",
+        "scope": "platform/project"
+      },
+      {
+        "name": "prometheus:responses:read",
+        "scope": "platform"
+      },
+      {
+        "name": "prometheus:responses:update",
+        "scope": "platform"
+      },
+      {
+        "name": "prometheus:responses:delete",
+        "scope": "platform"
+      },
+      {
+        "name": "prometheus:responses:analytics",
+        "scope": "platform"
+      }
     ]
   },
   "role_permissions": {
@@ -461,7 +496,15 @@
         "muse:tag:create",
         "muse:tag:delete",
         "muse:tag:read",
-        "muse:tag:update"
+        "muse:tag:update",
+        "prometheus:forms:create",
+        "prometheus:forms:read",
+        "prometheus:forms:update",
+        "prometheus:forms:delete",
+        "prometheus:responses:read",
+        "prometheus:responses:update",
+        "prometheus:responses:delete",
+        "prometheus:responses:analytics"
       ]
     },
     "ADMIN": {
@@ -521,7 +564,14 @@
         "muse:tag:create",
         "muse:tag:delete",
         "muse:tag:read",
-        "muse:tag:update"
+        "muse:tag:update",
+        "prometheus:forms:create",
+        "prometheus:forms:read",
+        "prometheus:forms:update",
+        "prometheus:responses:read",
+        "prometheus:responses:update",
+        "prometheus:responses:delete",
+        "prometheus:responses:analytics"
       ]
     },
     "EDITOR": {
@@ -551,7 +601,12 @@
         "muse:redirect:update",
         "muse:tag:create",
         "muse:tag:read",
-        "muse:tag:update"
+        "muse:tag:update",
+        "prometheus:forms:create",
+        "prometheus:forms:read",
+        "prometheus:forms:update",
+        "prometheus:responses:read",
+        "prometheus:responses:analytics"
       ]
     },
     "VIEWER": {
@@ -565,7 +620,9 @@
         "muse:author:read",
         "muse:tag:read",
         "muse:category:read",
-        "muse:redirect:read"
+        "muse:redirect:read",
+        "prometheus:forms:read",
+        "prometheus:responses:read"
       ]
     }
   },
