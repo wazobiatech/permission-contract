@@ -169,19 +169,19 @@
     "muse": [
       {
         "name": "muse:blog:create",
-        "scope": "platform"
+        "scope": "platform/project"
       },
       {
         "name": "muse:blog:read",
-        "scope": "platform"
+        "scope": "platform/project"
       },
       {
         "name": "muse:blog:update",
-        "scope": "platform"
+        "scope": "platform/project"
       },
       {
         "name": "muse:blog:delete",
-        "scope": "platform"
+        "scope": "platform/project"
       },
       {
         "name": "muse:author:create",
@@ -628,7 +628,6 @@
   },
   "owner_only_permissions": [
     "athens:project:delete",
-    "muse:blog:delete",
     "helios:tenant:transfer",
     "helios:external:register",
     "helios:external:revoke"
