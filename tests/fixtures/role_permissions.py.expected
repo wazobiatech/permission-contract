@@ -1,0 +1,629 @@
+"""helios-permissions — Role → Permission map and helpers.
+
+Canonical source of truth for the platform. Generated from the
+language-agnostic JSON contract at `wazobiatech/permission-contract`
+v1.11.0 (generated 2026-07-24). Do NOT edit by hand — edit the
+contract's `permissions.json` and re-run codegen.
+
+The Helios service imports this module via the published package; Helios
+does NOT redefine the map. TS / Python / Go / Laravel SDKs that read the
+same JSON contract agree on what OWNER / ADMIN / EDITOR / VIEWER means.
+
+Permission naming convention: `{service}:{resource}:{action}`.
+
+  - service  — one of: athens, mercury, muse, helios, zeta, prometheus
+  - resource — domain noun (project, users, posts, members, ...)
+  - action   — verb (view, write, delete, manage, ...)
+
+v1.3.0 perm scopes — the resolver uses `PERM_SCOPE[perm]` to gate which
+path (platform-user vs tenant-user) is valid for a given perm:
+
+  - `self`              — universal, granted implicitly (no role needed).
+  - `platform`          — granted via ROLE_PERMISSIONS (platform-user path);
+                           cannot be bundled into a TenantRole.
+  - `project`           — granted via TenantRole (tenant-user path);
+                           cannot appear in ROLE_PERMISSIONS.
+  - `platform/project`  — valid via either path (dual-scope).
+
+ZIN-4714 — `helios:tenant:transfer` is OWNER-only by design. Ownership
+transfer is the single entry point to the OWNER role (`assign_member`
+and `create_invitation` refuse `role=OWNER`); it cannot be delegated
+to ADMIN.
+"""
+
+# -----------------------------------------------------------------------------
+# Permission vocabulary, partitioned by scope (v1.3.0+)
+# -----------------------------------------------------------------------------
+
+from typing import Final, Literal  # noqa: E402
+
+SELF_PERMISSIONS: Final[tuple[str, ...]] = (
+    "mercury:user:read:self",
+    "mercury:user:write:self",
+    "mercury:user:delete:self",
+    "mercury:connection:read:self",
+    "mercury:connection_slack:phrase_create:self",
+    "mercury:connection_oauth:initiate:self",
+    "mercury:connection_oauth:complete:self",
+    "mercury:connection_slack:revoke:self",
+    "mercury:connection_google:revoke:self",
+    "mercury:connection_imap:revoke:self",
+    "mercury:connection_imap:create:self",
+    "helios:tenant:switch:self",
+)
+
+PLATFORM_PERMISSIONS: Final[tuple[str, ...]] = (
+    "athens:project:view",
+    "athens:project:update",
+    "athens:project:delete",
+    "athens:services:enable",
+    "athens:services:disable",
+    "athens:team:invite",
+    "athens:team:remove",
+    "mercury:users:read",
+    "mercury:users:write",
+    "mercury:users:batch_read",
+    "mercury:api_keys:create",
+    "mercury:api_keys:revoke",
+    "mercury:api_keys:read",
+    "mercury:api_keys:manage",
+    "mercury:service_clients:read",
+    "mercury:auth_config:read",
+    "mercury:auth_config_apple:create",
+    "mercury:auth_config_apple:update",
+    "mercury:auth_config_oauth:create",
+    "mercury:auth_config_oauth:update",
+    "mercury:auth_config_forgot_password:create",
+    "mercury:auth_config_forgot_password:update",
+    "mercury:auth_config_forgot_password:read",
+    "mercury:connection_oauth:refresh",
+    "mercury:events:consume",
+    "muse:blog:create",
+    "muse:blog:read",
+    "muse:blog:update",
+    "muse:blog:delete",
+    "helios:tenant:transfer",
+    "helios:members:view",
+    "helios:members:invite",
+    "helios:members:remove",
+    "helios:roles:assign",
+    "helios:roles:revoke",
+    "helios:invitations:create",
+    "helios:invitations:revoke",
+    "helios:external:register",
+    "helios:external:revoke",
+    "helios:external:view",
+)
+
+PROJECT_PERMISSIONS: Final[tuple[str, ...]] = (
+    "muse:posts:read",
+    "muse:posts:write",
+    "muse:drafts:read",
+    "muse:drafts:write",
+    "zeta:fines:view",
+    "zeta:fines:create",
+    "zeta:fines:pay",
+    "zeta:fines:challenge",
+    "zeta:fines:assign",
+    "zeta:fleet:view",
+    "zeta:fleet:edit",
+    "zeta:drivers:view",
+    "zeta:drivers:manage",
+    "zeta:reports:view",
+    "zeta:billing:view",
+    "zeta:billing:manage",
+    "zeta:team:manage",
+    "zeta:tenant:configure",
+)
+
+DUAL_PERMISSIONS: Final[tuple[str, ...]] = (
+    "muse:author:create",
+    "muse:author:read",
+    "muse:author:update",
+    "muse:author:delete",
+    "muse:posts:delete",
+    "muse:posts:revert",
+    "muse:tag:create",
+    "muse:tag:read",
+    "muse:tag:update",
+    "muse:tag:delete",
+    "muse:category:create",
+    "muse:category:read",
+    "muse:category:update",
+    "muse:category:delete",
+    "muse:redirect:create",
+    "muse:redirect:read",
+    "muse:redirect:update",
+    "muse:redirect:delete",
+    "muse:redirect:analytics",
+    "muse:faq:create",
+    "muse:faq:update",
+    "muse:faq:delete",
+    "prometheus:forms:create",
+    "prometheus:forms:read",
+    "prometheus:forms:update",
+    "prometheus:forms:delete",
+    "prometheus:responses:read",
+    "prometheus:responses:update",
+    "prometheus:responses:delete",
+    "prometheus:responses:analytics",
+)
+
+# The full set of valid permission strings in the system.
+# Use Literal[...] at type-check time for closed-union typo detection.
+SelfPermission = Literal[
+    "mercury:user:read:self",
+    "mercury:user:write:self",
+    "mercury:user:delete:self",
+    "mercury:connection:read:self",
+    "mercury:connection_slack:phrase_create:self",
+    "mercury:connection_oauth:initiate:self",
+    "mercury:connection_oauth:complete:self",
+    "mercury:connection_slack:revoke:self",
+    "mercury:connection_google:revoke:self",
+    "mercury:connection_imap:revoke:self",
+    "mercury:connection_imap:create:self",
+    "helios:tenant:switch:self",
+]
+PlatformPermission = Literal[
+    "athens:project:view",
+    "athens:project:update",
+    "athens:project:delete",
+    "athens:services:enable",
+    "athens:services:disable",
+    "athens:team:invite",
+    "athens:team:remove",
+    "mercury:users:read",
+    "mercury:users:write",
+    "mercury:users:batch_read",
+    "mercury:api_keys:create",
+    "mercury:api_keys:revoke",
+    "mercury:api_keys:read",
+    "mercury:api_keys:manage",
+    "mercury:service_clients:read",
+    "mercury:auth_config:read",
+    "mercury:auth_config_apple:create",
+    "mercury:auth_config_apple:update",
+    "mercury:auth_config_oauth:create",
+    "mercury:auth_config_oauth:update",
+    "mercury:auth_config_forgot_password:create",
+    "mercury:auth_config_forgot_password:update",
+    "mercury:auth_config_forgot_password:read",
+    "mercury:connection_oauth:refresh",
+    "mercury:events:consume",
+    "muse:blog:create",
+    "muse:blog:read",
+    "muse:blog:update",
+    "muse:blog:delete",
+    "helios:tenant:transfer",
+    "helios:members:view",
+    "helios:members:invite",
+    "helios:members:remove",
+    "helios:roles:assign",
+    "helios:roles:revoke",
+    "helios:invitations:create",
+    "helios:invitations:revoke",
+    "helios:external:register",
+    "helios:external:revoke",
+    "helios:external:view",
+]
+ProjectPermission = Literal[
+    "muse:posts:read",
+    "muse:posts:write",
+    "muse:drafts:read",
+    "muse:drafts:write",
+    "zeta:fines:view",
+    "zeta:fines:create",
+    "zeta:fines:pay",
+    "zeta:fines:challenge",
+    "zeta:fines:assign",
+    "zeta:fleet:view",
+    "zeta:fleet:edit",
+    "zeta:drivers:view",
+    "zeta:drivers:manage",
+    "zeta:reports:view",
+    "zeta:billing:view",
+    "zeta:billing:manage",
+    "zeta:team:manage",
+    "zeta:tenant:configure",
+]
+DualPermission = Literal[
+    "muse:author:create",
+    "muse:author:read",
+    "muse:author:update",
+    "muse:author:delete",
+    "muse:posts:delete",
+    "muse:posts:revert",
+    "muse:tag:create",
+    "muse:tag:read",
+    "muse:tag:update",
+    "muse:tag:delete",
+    "muse:category:create",
+    "muse:category:read",
+    "muse:category:update",
+    "muse:category:delete",
+    "muse:redirect:create",
+    "muse:redirect:read",
+    "muse:redirect:update",
+    "muse:redirect:delete",
+    "muse:redirect:analytics",
+    "muse:faq:create",
+    "muse:faq:update",
+    "muse:faq:delete",
+    "prometheus:forms:create",
+    "prometheus:forms:read",
+    "prometheus:forms:update",
+    "prometheus:forms:delete",
+    "prometheus:responses:read",
+    "prometheus:responses:update",
+    "prometheus:responses:delete",
+    "prometheus:responses:analytics",
+]
+Permission = Literal[SelfPermission | PlatformPermission | ProjectPermission | DualPermission]
+
+# Mirrors the contract's `scope` enum. Four valid values.
+PermScope = Literal["self", "platform", "project", "platform/project"]
+
+# Perm → scope lookup, populated at module load. The two-track resolver in
+# Helios checks `PERM_SCOPE[perm]` to decide which path (platform-user vs
+# tenant-user) is valid for the perm.
+PERM_SCOPE: Final[dict[str, PermScope]] = {
+    "mercury:user:read:self": "self",
+    "mercury:user:write:self": "self",
+    "mercury:user:delete:self": "self",
+    "mercury:connection:read:self": "self",
+    "mercury:connection_slack:phrase_create:self": "self",
+    "mercury:connection_oauth:initiate:self": "self",
+    "mercury:connection_oauth:complete:self": "self",
+    "mercury:connection_slack:revoke:self": "self",
+    "mercury:connection_google:revoke:self": "self",
+    "mercury:connection_imap:revoke:self": "self",
+    "mercury:connection_imap:create:self": "self",
+    "helios:tenant:switch:self": "self",
+    "athens:project:view": "platform",
+    "athens:project:update": "platform",
+    "athens:project:delete": "platform",
+    "athens:services:enable": "platform",
+    "athens:services:disable": "platform",
+    "athens:team:invite": "platform",
+    "athens:team:remove": "platform",
+    "mercury:users:read": "platform",
+    "mercury:users:write": "platform",
+    "mercury:users:batch_read": "platform",
+    "mercury:api_keys:create": "platform",
+    "mercury:api_keys:revoke": "platform",
+    "mercury:api_keys:read": "platform",
+    "mercury:api_keys:manage": "platform",
+    "mercury:service_clients:read": "platform",
+    "mercury:auth_config:read": "platform",
+    "mercury:auth_config_apple:create": "platform",
+    "mercury:auth_config_apple:update": "platform",
+    "mercury:auth_config_oauth:create": "platform",
+    "mercury:auth_config_oauth:update": "platform",
+    "mercury:auth_config_forgot_password:create": "platform",
+    "mercury:auth_config_forgot_password:update": "platform",
+    "mercury:auth_config_forgot_password:read": "platform",
+    "mercury:connection_oauth:refresh": "platform",
+    "mercury:events:consume": "platform",
+    "muse:blog:create": "platform",
+    "muse:blog:read": "platform",
+    "muse:blog:update": "platform",
+    "muse:blog:delete": "platform",
+    "helios:tenant:transfer": "platform",
+    "helios:members:view": "platform",
+    "helios:members:invite": "platform",
+    "helios:members:remove": "platform",
+    "helios:roles:assign": "platform",
+    "helios:roles:revoke": "platform",
+    "helios:invitations:create": "platform",
+    "helios:invitations:revoke": "platform",
+    "helios:external:register": "platform",
+    "helios:external:revoke": "platform",
+    "helios:external:view": "platform",
+    "muse:posts:read": "project",
+    "muse:posts:write": "project",
+    "muse:drafts:read": "project",
+    "muse:drafts:write": "project",
+    "zeta:fines:view": "project",
+    "zeta:fines:create": "project",
+    "zeta:fines:pay": "project",
+    "zeta:fines:challenge": "project",
+    "zeta:fines:assign": "project",
+    "zeta:fleet:view": "project",
+    "zeta:fleet:edit": "project",
+    "zeta:drivers:view": "project",
+    "zeta:drivers:manage": "project",
+    "zeta:reports:view": "project",
+    "zeta:billing:view": "project",
+    "zeta:billing:manage": "project",
+    "zeta:team:manage": "project",
+    "zeta:tenant:configure": "project",
+    "muse:author:create": "platform/project",
+    "muse:author:read": "platform/project",
+    "muse:author:update": "platform/project",
+    "muse:author:delete": "platform/project",
+    "muse:posts:delete": "platform/project",
+    "muse:posts:revert": "platform/project",
+    "muse:tag:create": "platform/project",
+    "muse:tag:read": "platform/project",
+    "muse:tag:update": "platform/project",
+    "muse:tag:delete": "platform/project",
+    "muse:category:create": "platform/project",
+    "muse:category:read": "platform/project",
+    "muse:category:update": "platform/project",
+    "muse:category:delete": "platform/project",
+    "muse:redirect:create": "platform/project",
+    "muse:redirect:read": "platform/project",
+    "muse:redirect:update": "platform/project",
+    "muse:redirect:delete": "platform/project",
+    "muse:redirect:analytics": "platform/project",
+    "muse:faq:create": "platform/project",
+    "muse:faq:update": "platform/project",
+    "muse:faq:delete": "platform/project",
+    "prometheus:forms:create": "platform/project",
+    "prometheus:forms:read": "platform/project",
+    "prometheus:forms:update": "platform/project",
+    "prometheus:forms:delete": "platform/project",
+    "prometheus:responses:read": "platform/project",
+    "prometheus:responses:update": "platform/project",
+    "prometheus:responses:delete": "platform/project",
+    "prometheus:responses:analytics": "platform/project",
+}
+
+# The closed set of roles. Mirrors `RoleType` in Helios's Prisma schema.
+ROLES: Final[tuple[str, ...]] = ("OWNER", "ADMIN", "EDITOR", "VIEWER")
+Role = Literal["OWNER", "ADMIN", "EDITOR", "VIEWER"]
+
+
+# -----------------------------------------------------------------------------
+# Role → Permission map
+# -----------------------------------------------------------------------------
+
+# ROLE_PERMISSIONS only contains `platform` and `platform/project` perms;
+# `self` perms are universal (granted by the resolver's Step 1) and
+# `project` perms are for tenant users via TenantRole.
+ROLE_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
+    "OWNER": (
+        "athens:project:delete",
+        "athens:project:update",
+        "athens:project:view",
+        "athens:services:disable",
+        "athens:services:enable",
+        "athens:team:invite",
+        "athens:team:remove",
+        "helios:external:register",
+        "helios:external:revoke",
+        "helios:external:view",
+        "helios:invitations:create",
+        "helios:invitations:revoke",
+        "helios:members:invite",
+        "helios:members:remove",
+        "helios:members:view",
+        "helios:roles:assign",
+        "helios:roles:revoke",
+        "helios:tenant:transfer",
+        "mercury:api_keys:create",
+        "mercury:api_keys:manage",
+        "mercury:api_keys:read",
+        "mercury:api_keys:revoke",
+        "mercury:auth_config:read",
+        "mercury:auth_config_apple:create",
+        "mercury:auth_config_apple:update",
+        "mercury:auth_config_forgot_password:create",
+        "mercury:auth_config_forgot_password:read",
+        "mercury:auth_config_forgot_password:update",
+        "mercury:auth_config_oauth:create",
+        "mercury:auth_config_oauth:update",
+        "mercury:connection_oauth:refresh",
+        "mercury:events:consume",
+        "mercury:service_clients:read",
+        "mercury:users:batch_read",
+        "mercury:users:read",
+        "mercury:users:write",
+        "muse:author:create",
+        "muse:author:delete",
+        "muse:author:read",
+        "muse:author:update",
+        "muse:blog:create",
+        "muse:blog:delete",
+        "muse:blog:read",
+        "muse:blog:update",
+        "muse:category:create",
+        "muse:category:delete",
+        "muse:category:read",
+        "muse:category:update",
+        "muse:faq:create",
+        "muse:faq:delete",
+        "muse:faq:update",
+        "muse:posts:delete",
+        "muse:posts:revert",
+        "muse:redirect:analytics",
+        "muse:redirect:create",
+        "muse:redirect:delete",
+        "muse:redirect:read",
+        "muse:redirect:update",
+        "muse:tag:create",
+        "muse:tag:delete",
+        "muse:tag:read",
+        "muse:tag:update",
+        "prometheus:forms:create",
+        "prometheus:forms:read",
+        "prometheus:forms:update",
+        "prometheus:forms:delete",
+        "prometheus:responses:read",
+        "prometheus:responses:update",
+        "prometheus:responses:delete",
+        "prometheus:responses:analytics",
+    ),
+    "ADMIN": (
+        "athens:project:update",
+        "athens:project:view",
+        "athens:services:disable",
+        "athens:services:enable",
+        "athens:team:invite",
+        "athens:team:remove",
+        "helios:external:view",
+        "helios:invitations:create",
+        "helios:invitations:revoke",
+        "helios:members:invite",
+        "helios:members:remove",
+        "helios:members:view",
+        "helios:roles:assign",
+        "helios:roles:revoke",
+        "mercury:api_keys:create",
+        "mercury:api_keys:read",
+        "mercury:api_keys:revoke",
+        "mercury:auth_config:read",
+        "mercury:auth_config_apple:create",
+        "mercury:auth_config_apple:update",
+        "mercury:auth_config_forgot_password:create",
+        "mercury:auth_config_forgot_password:read",
+        "mercury:auth_config_forgot_password:update",
+        "mercury:auth_config_oauth:create",
+        "mercury:auth_config_oauth:update",
+        "mercury:connection_oauth:refresh",
+        "mercury:events:consume",
+        "mercury:service_clients:read",
+        "mercury:users:read",
+        "mercury:users:write",
+        "muse:author:create",
+        "muse:author:delete",
+        "muse:author:read",
+        "muse:author:update",
+        "muse:blog:create",
+        "muse:blog:read",
+        "muse:blog:update",
+        "muse:category:create",
+        "muse:category:delete",
+        "muse:category:read",
+        "muse:category:update",
+        "muse:faq:create",
+        "muse:faq:delete",
+        "muse:faq:update",
+        "muse:posts:delete",
+        "muse:posts:revert",
+        "muse:redirect:analytics",
+        "muse:redirect:create",
+        "muse:redirect:delete",
+        "muse:redirect:read",
+        "muse:redirect:update",
+        "muse:tag:create",
+        "muse:tag:delete",
+        "muse:tag:read",
+        "muse:tag:update",
+        "prometheus:forms:create",
+        "prometheus:forms:read",
+        "prometheus:forms:update",
+        "prometheus:responses:read",
+        "prometheus:responses:update",
+        "prometheus:responses:delete",
+        "prometheus:responses:analytics",
+    ),
+    "EDITOR": (
+        "athens:project:view",
+        "mercury:api_keys:read",
+        "mercury:service_clients:read",
+        "mercury:users:read",
+        "muse:author:create",
+        "muse:author:delete",
+        "muse:author:read",
+        "muse:author:update",
+        "muse:blog:create",
+        "muse:blog:read",
+        "muse:blog:update",
+        "muse:category:create",
+        "muse:category:read",
+        "muse:category:update",
+        "muse:faq:create",
+        "muse:faq:delete",
+        "muse:faq:update",
+        "muse:posts:delete",
+        "muse:posts:revert",
+        "muse:redirect:create",
+        "muse:redirect:read",
+        "muse:redirect:update",
+        "muse:tag:create",
+        "muse:tag:read",
+        "muse:tag:update",
+        "prometheus:forms:create",
+        "prometheus:forms:read",
+        "prometheus:forms:update",
+        "prometheus:responses:read",
+        "prometheus:responses:analytics",
+    ),
+    "VIEWER": (
+        "athens:project:view",
+        "mercury:users:read",
+        "mercury:api_keys:read",
+        "mercury:service_clients:read",
+        "muse:blog:read",
+        "muse:author:read",
+        "muse:tag:read",
+        "muse:category:read",
+        "muse:redirect:read",
+        "prometheus:forms:read",
+        "prometheus:responses:read",
+    ),
+}
+
+
+def resolve_permissions(role: str) -> tuple[str, ...]:
+    """Return the read-only permission tuple for a role.
+
+    Spread it (`list(resolve_permissions(role))`) if you need a mutable
+    copy.
+    """
+    return ROLE_PERMISSIONS[role]
+
+
+def role_has_permission(role: str, perm: str) -> bool:
+    """`True` if `role` is granted `perm`.
+
+    Convenience wrapper around `ROLE_PERMISSIONS[role]`. Used by Helios's
+    `PermissionResolverService` when resolving per-tenant membership rows.
+    """
+    return perm in ROLE_PERMISSIONS[role]
+
+
+def is_self_scope(perm: str) -> bool:
+    """`True` if `perm` has scope `self` (universal — granted without
+    any role lookup). Used by the resolver's Step 1.
+    """
+    return PERM_SCOPE.get(perm) == "self"
+
+
+def is_platform_grantable(perm: str) -> bool:
+    """`True` if `perm` is grantable via the platform-user path (scope
+    is `platform` or `platform/project`).
+    """
+    s = PERM_SCOPE.get(perm)
+    return s == "platform" or s == "platform/project"
+
+
+def is_tenant_grantable(perm: str) -> bool:
+    """`True` if `perm` is grantable via the tenant-user path (scope is
+    `project` or `platform/project`, OR scope is unknown — tenant-defined
+    perms are always grantable via TenantRole).
+    """
+    if perm not in PERM_SCOPE:
+        return True  # tenant-defined perm
+    s = PERM_SCOPE[perm]
+    return s == "project" or s == "platform/project"
+
+
+def is_permission(value: object) -> bool:
+    """Type guard — `True` if `value` is a known Permission string.
+
+    Use at trust boundaries (HTTP request bodies, Kafka payloads) where
+    the perm may be an arbitrary string and we want to reject unknowns
+    rather than silently return `False`.
+    """
+    if not isinstance(value, str):
+        return False
+    return value in PERM_SCOPE
+
+
+def is_role(value: object) -> bool:
+    """Type guard — `True` if `value` is a known Role string."""
+    return isinstance(value, str) and value in ROLES
+
