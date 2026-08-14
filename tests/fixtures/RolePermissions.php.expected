@@ -389,19 +389,36 @@ final class RolePermissions
 
     /**
      * True if perm is universal-by-contract — granted to every
-     * authenticated caller without consulting Helios. True only for
-     * self-scope perms.
+     * authenticated caller without consulting Helios. Holds when
+     * either the perm is self-scope, or it appears in every role's
+     * ROLE_PERMISSIONS entry (OWNER + ADMIN + EDITOR + VIEWER).
+     * Mirrors the TS SDK's isUniversalPerm.
      *
-     * platform / project / platform-project perms always go through
-     * Helios, even if a perm happens to be granted to all 4 roles —
-     * per-tenant authorization must be checked per caller, since a
-     * tenant's TenantRole bundle can restrict a dual-scope perm
-     * independently of the platform role_permissions matrix. Only
-     * self-scope perms are exempt from tenant membership entirely.
+     * Why this exists: Helios stores per-(user, tenant) membership
+     * rows. Root-tenant users (Mercury's platform admins) and any
+     * other tenantless caller have no row to look up. Without this
+     * short-circuit, every callerHasPermission for a universal
+     * perm would resolve to not_a_member and 403 the caller. The
+     * contract invariant is that these perms do NOT depend on
+     * tenant membership — they are universal.
+     *
+     * The check trusts the contract: if a perm is in every role's
+     * perm array, the contract author intends every authenticated
+     * user to have it. Adding a perm to all four roles is a
+     * deliberate, reviewable contract decision — the SDK honors
+     * it without re-fetching.
      */
     public static function isUniversalPerm(Permission $perm): bool
     {
-        return self::isSelfScope($perm);
+        if (self::isSelfScope($perm)) {
+            return true;
+        }
+        foreach (self::ROLES as $role) {
+            if (!in_array($perm, self::resolve($role), true)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
