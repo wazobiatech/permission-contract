@@ -35,6 +35,13 @@ const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
 const VERSION = contract.version;
 const GENERATED_AT = new Date().toISOString().slice(0, 10);
 
+// Converts a single ':'-delimited segment to PascalCase, splitting on '_' so
+// e.g. "auth_config_apple" -> "AuthConfigApple" (not "Auth_config_apple").
+// The single source of truth for perm -> identifier naming — used for both
+// the Permission const block and ROLE_PERMISSIONS' references to them.
+const segmentToPascal = (seg) => seg.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+const permCaseName = (name) => name.split(':').map(segmentToPascal).join('');
+
 // Perms are objects in v1.3.0+. Flatten and bucket by scope.
 const SELF = [];
 const PLATFORM = [];
@@ -43,8 +50,7 @@ const DUAL = [];
 const ALL_BY_NAME = []; // sorted list of { name, constName } for the const block
 for (const [, perms] of Object.entries(contract.permissions)) {
   for (const p of perms) {
-    const parts = p.name.split(':');
-    const camel = parts.map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1)).join('');
+    const camel = permCaseName(p.name);
     const entry = { perm: p.name, constName: `Permission${camel}` };
     ALL_BY_NAME.push(entry);
     if (p.scope === 'self') SELF.push(entry);
@@ -225,9 +231,7 @@ for (const { role, perms } of roles) {
   const roleConst = `Role${role.charAt(0) + role.slice(1).toLowerCase()}`;
   w(`\t${roleConst}: {`);
   for (const p of perms) {
-    const parts = p.split(':');
-    const camel = parts.map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1)).join('');
-    w(`\t\tPermission${camel},`);
+    w(`\t\tPermission${permCaseName(p)},`);
   }
   w(`\t},`);
 }

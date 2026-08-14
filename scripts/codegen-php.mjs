@@ -42,6 +42,18 @@ const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
 const VERSION = contract.version;
 const GENERATED_AT = new Date().toISOString().slice(0, 10);
 
+// Converts a single ':'-delimited segment to PascalCase, splitting on '_' so
+// e.g. "auth_config_apple" -> "AuthConfigApple" (not "Auth_config_apple").
+// The single source of truth for perm -> enum-case naming — used for both
+// Permission.php's case declarations and RolePermissions.php's references to
+// them. Prior to this, the two call sites each inlined their own copy of the
+// (buggy, underscore-preserving) capitalization logic, which is how
+// Permission.php and RolePermissions.php drifted out of sync in a downstream
+// consumer (helios-permission-laravel): one copy got hand-patched, the other
+// didn't.
+const segmentToPascal = (seg) => seg.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+const permCaseName = (name) => name.split(':').map(segmentToPascal).join('');
+
 // Perms are objects in v1.3.0+. Flatten and bucket by scope.
 const SELF = [];
 const PLATFORM = [];
@@ -50,8 +62,7 @@ const DUAL = [];
 const allPerms = []; // sorted list of { name, caseName }
 for (const [, perms] of Object.entries(contract.permissions)) {
   for (const p of perms) {
-    const parts = p.name.split(':');
-    const caseName = parts.map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1)).join('');
+    const caseName = permCaseName(p.name);
     const entry = { name: p.name, caseName, scope: p.scope };
     allPerms.push(entry);
     if (p.scope === 'self') SELF.push(entry);
@@ -153,9 +164,7 @@ rpLines.push(`    private const ROLE_PERMISSIONS = [`);
 for (const { role, perms } of roles) {
   rpLines.push(`        '${role}' => [`);
   for (const p of perms) {
-    const parts = p.split(':');
-    const cName = parts.map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1)).join('');
-    rpLines.push(`            Permission::${cName},`);
+    rpLines.push(`            Permission::${permCaseName(p)},`);
   }
   rpLines.push(`        ],`);
 }
@@ -222,6 +231,23 @@ rpLines.push(`     */`);
 rpLines.push(`    public static function isSelfScope(Permission $perm): bool`);
 rpLines.push(`    {`);
 rpLines.push(`        return self::scopeOf($perm) === PermScope::Self;`);
+rpLines.push(`    }`);
+rpLines.push(``);
+rpLines.push(`    /**`);
+rpLines.push(`     * True if perm is universal-by-contract — granted to every`);
+rpLines.push(`     * authenticated caller without consulting Helios. True only for`);
+rpLines.push(`     * self-scope perms.`);
+rpLines.push(`     *`);
+rpLines.push(`     * platform / project / platform-project perms always go through`);
+rpLines.push(`     * Helios, even if a perm happens to be granted to all 4 roles —`);
+rpLines.push(`     * per-tenant authorization must be checked per caller, since a`);
+rpLines.push(`     * tenant's TenantRole bundle can restrict a dual-scope perm`);
+rpLines.push(`     * independently of the platform role_permissions matrix. Only`);
+rpLines.push(`     * self-scope perms are exempt from tenant membership entirely.`);
+rpLines.push(`     */`);
+rpLines.push(`    public static function isUniversalPerm(Permission $perm): bool`);
+rpLines.push(`    {`);
+rpLines.push(`        return self::isSelfScope($perm);`);
 rpLines.push(`    }`);
 rpLines.push(``);
 rpLines.push(`    /**`);
